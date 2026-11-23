@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Industrial AGV Warehouse Simulation </title>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { margin:0; background:#eaf1f8; color:#172434; overflow-x:hidden; }
+    #scene-shell { position:relative; width:100%; height:100vh; min-height:420px; background:#dfe8f2; overflow:hidden; }
+    #scene-container { position:absolute; inset:0; z-index:1; }
+    .topbar {
+      position:absolute; top:12px; left:12px; right:12px; z-index:20; display:flex;
+      justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+      background:rgba(255,255,255,.97); border-radius:18px; padding:14px 16px;
+      border:1px solid #d8e7f6; box-shadow:0 10px 28px rgba(0,0,0,.10);
+    }
+    .title { font-size:22px; font-weight:800; }
+    .badges { display:flex; gap:8px; flex-wrap:wrap; }
+    .badge { padding:8px 12px; border-radius:999px; font-size:12px; font-weight:700; }
+    .ok { background:#daf7e3; color:#10783b; }
+    .info { background:#dceaff; color:#124d9c; }
+    .warn { background:#fff1cb; color:#8c6700; }
+    .danger { background:#ffd9d9; color:#a52626; }
+
+    .panel {
+      position:absolute; z-index:20; background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(247,251,255,.97));
+      border:1px solid #d8e7f6; border-radius:20px; padding:14px;
+      box-shadow:0 14px 34px rgba(0,0,0,.11);
+    }
+    .left-panel { left:12px; top:92px; width:290px; backdrop-filter: blur(10px); }
+    .right-panel { right:12px; top:92px; width:450px; max-height:calc(100vh - 312px); overflow-y:auto; overflow-x:hidden; padding-right:10px; }
+    .bottom-panel { left:12px; right:12px; bottom:12px; min-height:190px; }
+
+    h3 { margin:0 0 10px; color:#163d75; font-size:18px; }
+    .section-title { font-size:14px; font-weight:800; color:#163d75; margin:12px 0 8px; }
+    .control-grid { display:grid; grid-template-columns:56px 56px 56px; gap:8px; justify-content:center; margin-bottom:12px; }
+    .ctrl-btn {
+      height:52px; border:none; border-radius:16px;
+      background:linear-gradient(180deg,#3b82f6,#1d4ed8);
+      color:#fff; font-size:18px; font-weight:800; cursor:pointer;
+      box-shadow:0 10px 24px rgba(29,78,216,.28), inset 0 1px 0 rgba(255,255,255,.25);
+      border:1px solid rgba(255,255,255,.18);
+      transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    }
+    .ctrl-btn:hover { transform:translateY(-1px); filter:brightness(1.03); }
+    .ctrl-btn:active { transform:translateY(1px) scale(.98); }
+    .stop {
+      background:linear-gradient(180deg,#ff6b6b,#dc2626);
+      box-shadow:0 10px 24px rgba(220,38,38,.25), inset 0 1px 0 rgba(255,255,255,.25);
+    }
+    .empty { visibility:hidden; }
+    .toggle-row { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:10px; }
+    .toggle-row button, .mini-btn {
+      border:none; border-radius:13px; padding:10px 12px; cursor:pointer; font-weight:700;
+      background:linear-gradient(180deg,#edf4ff,#dce8f7); color:#1d3d6b;
+      border:1px solid #d4e1f3; box-shadow:0 4px 10px rgba(40,84,140,.08);
+    }
+    .toggle-row button.active { background:linear-gradient(180deg,#1d4ed8,#163d75); color:white; }
+    .mini-btn { margin-top:8px; background:linear-gradient(180deg,#f5f9ff,#e8f1ff); border:1px solid #d6e4f7; }
+    .camera-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+    .camera-row button.active { background:#163d75; color:#fff; }
+
+    .slider-block { margin-bottom:10px; }
+    .slider-block label { display:block; font-weight:700; margin-bottom:6px; font-size:13px; }
+    .slider-block input { width:100%; }
+    .telemetry-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; margin-bottom:8px; }
+    .telemetry-line { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid #eaf0f8; font-size:14px; min-height:34px; }
+    .telemetry-line span:first-child { color:#415b7f; font-weight:700; }
+    .telemetry-line span:last-child { color:#172434; font-weight:800; text-align:right; }
+
+    .card { margin-top:12px; border:1px solid #dce8f6; border-radius:14px; padding:10px; background:#f8fbff; }
+    #miniMap { width:100%; height:250px; border-radius:12px; background:#eef5fb; border:1px solid #d7e4f4; display:block; }
+    .legend { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:11px; color:#4d647f; }
+    .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+    .queue-list { display:grid; gap:6px; min-height:96px; }
+    .queue-item { padding:8px 10px; border-radius:10px; background:#eef5ff; color:#24436d; border:1px solid #d8e7ff; font-weight:700; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .queue-item.active { background:#163d75; color:white; }
+    .queue-item.done { background:#e7f9ee; color:#10783b; border-color:#bce7cb; }
+    .status-pill { font-size:10px; padding:4px 7px; border-radius:999px; background:rgba(255,255,255,.6); }
+    .charge-wrap { display:flex; gap:14px; align-items:center; }
+    .charge-ring { width:64px; height:64px; border-radius:50%; background: conic-gradient(#22c55e 0deg, #60a5fa 0deg, #dce8f6 0deg 360deg); display:grid; place-items:center; position:relative; flex:0 0 auto; }
+    .charge-ring::before { content:""; width:46px; height:46px; border-radius:50%; background:#f8fbff; }
+    .charge-label { position:absolute; inset:0; display:grid; place-items:center; font-weight:800; font-size:12px; color:#163d75; }
+    .charge-bar-wrap { width:100%; height:18px; background:#dce8f6; border-radius:999px; overflow:hidden; border:1px solid #c8d9ef; }
+    .charge-bar { height:100%; width:0%; background:linear-gradient(90deg,#22c55e,#60a5fa,#22c55e); background-size:200% 100%; animation:chargeFlow 1.2s linear infinite; transition:width .15s linear; }
+    @keyframes chargeFlow { 0% { background-position:0% 0; } 100% { background-position:200% 0; } }
+
+    .stats-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:10px; }
+    .stat { background:#f7fbff; border:1px solid #dde9f7; border-radius:14px; padding:10px; text-align:center; }
+    .stat-title { font-size:12px; color:#526985; margin-bottom:4px; font-weight:700; }
+    .stat-value { font-size:18px; font-weight:800; color:#1a3155; text-transform:capitalize; }
+    .log-box { height:92px; overflow-y:auto; border:1px solid #dce8f6; border-radius:12px; background:#f8fbff; padding:10px 12px; font-size:12px; }
+    .log-item { padding:4px 0; border-bottom:1px solid #ebf2fb; }
+    .help { font-size:12px; color:#5c6f84; line-height:1.45; margin-top:8px; }
+    #errorBox {
+      position:absolute; top:88px; left:50%; transform:translateX(-50%); z-index:30;
+      background:#ffe1e1; color:#a52626; border:1px solid #f0b6b6; border-radius:12px;
+      padding:10px 14px; font-weight:700; display:none; max-width:700px;
+    }
+    .mobile-bottom-nav { display:none; }
+    .mobile-section { display:block; }
+
+    @media (max-width: 1200px) {
+      .right-panel { width: 360px; max-height: calc(100vh - 312px); }
+      .telemetry-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 1100px) {
+      .left-panel { width: 255px; }
+      .right-panel { width: 320px; }
+      .stats-grid { grid-template-columns: repeat(3,1fr); }
+    }
+    @media (max-width: 820px) {
+      #scene-shell { height: 50vh; min-height: 320px; }
+      .panel { position:static; width:auto !important; max-height:none !important; margin:12px 10px 0 10px; overflow:visible; }
+      .left-panel, .right-panel, .bottom-panel { position:static; }
+      .bottom-panel { margin-bottom: 86px !important; }
+      .title { font-size: 18px; }
+      .badge { font-size: 10px; padding: 7px 10px; }
+      .stats-grid { grid-template-columns: repeat(2,1fr); }
+      .control-grid { grid-template-columns:54px 54px 54px; }
+      .ctrl-btn { height:48px; font-size:16px; }
+      #miniMap { height:210px; }
+      .mobile-bottom-nav {
+        display:grid; grid-template-columns:repeat(4,1fr); gap:8px; position:fixed; left:10px; right:10px; bottom:10px; z-index:50;
+        background:rgba(255,255,255,.97); border-radius:18px; padding:8px; box-shadow:0 10px 24px rgba(0,0,0,.14);
+      }
+      .mobile-bottom-nav button {
+        border:none; border-radius:12px; padding:10px 8px; font-size:12px; font-weight:700; background:#dfe8f7; color:#1d3d6b; cursor:pointer;
+      }
+      .mobile-bottom-nav button.active { background:#163d75; color:white; }
+      .mobile-section.hidden-mobile-section { display:none !important; }
+    }
+  </style>
+</head>
+<body>
+<div id="scene-shell">
+  <div id="scene-container"></div>
+  <div id="errorBox"></div>
+
+  <div class="topbar">
+    <div class="title">Industrial AGV Warehouse Simulation </div>
+    <div class="badges">
+      <div class="badge ok" id="connectionBadge">Connected</div>
+      <div class="badge info" id="modeBadge">Mode: Queue + A*</div>
+      <div class="badge warn" id="batteryBadge">Battery: 100%</div>
+      <div class="badge info" id="stateBadge">State: Idle</div>
+      <div class="badge info" id="taskBadge">Task: Waiting</div>
+      <div class="badge info" id="loadBadge">Load: Empty</div>
+    </div>
+  </div>
+
+  <div class="panel left-panel mobile-section" id="section-controls">
+    <h3 style="display:flex;align-items:center;gap:10px;">
+      <span style="display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;background:linear-gradient(180deg,#3b82f6,#1d4ed8);color:#fff;font-size:16px;">⇄</span>
+      <span>AGV Controls</span>
+    </h3>
+    <div class="control-grid">
+      <button class="ctrl-btn empty">-</button>
+      <button class="ctrl-btn" onclick="setCommand('forward')">▲</button>
+      <button class="ctrl-btn empty">-</button>
+      <button class="ctrl-btn" onclick="setCommand('left')">◀</button>
+      <button class="ctrl-btn stop" onclick="setCommand('stop')">■</button>
+      <button class="ctrl-btn" onclick="setCommand('right')">▶</button>
+      <button class="ctrl-btn empty">-</button>
+      <button class="ctrl-btn" onclick="setCommand('backward')">▼</button>
+      <button class="ctrl-btn empty">-</button>
+    </div>
+
+    <div class="section-title">Driving Mode</div>
+    <div class="toggle-row">
+      <button id="manualBtn" onclick="setMode('manual')">Manual</button>
+      <button id="autoBtn" onclick="setMode('auto')">Auto</button>
+      <button id="patrolBtn" onclick="setMode('patrol')">Patrol</button>
+      <button id="agvBtn" class="active" onclick="setMode('agv')">Queue + A*</button>
+    </div>
+
+    <div class="section-title">Camera View</div>
+    <div class="camera-row">
+      <button id="camFollowBtn" class="mini-btn active" onclick="setCameraMode('follow')">Follow</button>
+      <button id="camTopBtn" class="mini-btn" onclick="setCameraMode('top')">Top</button>
+      <button id="camDockBtn" class="mini-btn" onclick="setCameraMode('dock')">Dock</button>
+    </div>
+
+    <div class="slider-block"><label>Speed: <span id="speedValue">2.2</span></label><input type="range" id="speedSlider" min="0.5" max="6" step="0.1" value="2.2"></div>
+    <div class="slider-block"><label>Turn Rate: <span id="turnValue">2.0</span></label><input type="range" id="turnSlider" min="0.5" max="5" step="0.1" value="2.0"></div>
+    <div class="slider-block"><label>Sensor Range: <span id="rangeValue">10</span></label><input type="range" id="rangeSlider" min="4" max="20" step="0.5" value="10"></div>
+    <div class="slider-block"><label>Lookahead: <span id="lookaheadValue">4.5</span></label><input type="range" id="lookaheadSlider" min="2" max="10" step="0.5" value="4.5"></div>
+
+    <button class="mini-btn" onclick="resetArena()">Reset Arena</button>
+    <button class="mini-btn" onclick="randomizeObstacles()">Random Obstacles</button>
+    <button class="mini-btn" onclick="reloadTaskQueue()">Reload Task Queue</button>
+
+    <div class="help">
+      W/S/A/D = move, Space = stop<br>
+      G = queue mode, P = patrol, T = trail, R = rays<br>
+      First click anywhere to enable warning audio
+    </div>
+  </div>
+
+  <div class="panel right-panel mobile-section" id="section-telemetry">
+    <h3>Telemetry</h3>
+    <div class="telemetry-grid">
+      <div class="telemetry-line"><span>X Position</span><span id="teleX">0</span></div>
+      <div class="telemetry-line"><span>Z Position</span><span id="teleZ">0</span></div>
+      <div class="telemetry-line"><span>Heading</span><span id="teleHeading">0°</span></div>
+      <div class="telemetry-line"><span>Command</span><span id="teleCmd">stop</span></div>
+      <div class="telemetry-line"><span>Mode</span><span id="teleMode">agv</span></div>
+      <div class="telemetry-line"><span>Battery</span><span id="teleBattery">100%</span></div>
+      <div class="telemetry-line"><span>Front Distance</span><span id="teleDist">0</span></div>
+      <div class="telemetry-line"><span>Obstacle</span><span id="teleObs">No</span></div>
+      <div class="telemetry-line"><span>Current Target</span><span id="teleTarget">Pickup-A</span></div>
+      <div class="telemetry-line"><span>Payload</span><span id="teleLoad">Empty</span></div>
+      <div class="telemetry-line"><span>Lift</span><span id="teleLift">Down</span></div>
+      <div class="telemetry-line"><span>Recovery</span><span id="teleRecovery">No</span></div>
+      <div class="telemetry-line"><span>Aisle Reserved</span><span id="teleReserve">No</span></div>
+      <div class="telemetry-line"><span>Camera Mode</span><span id="teleCamera">follow</span></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Charging Progress</div>
+      <div class="charge-wrap">
+        <div class="charge-ring" id="chargeRing"><div class="charge-label" id="chargeRingLabel">100%</div></div>
+        <div style="flex:1">
+          <div class="charge-bar-wrap"><div class="charge-bar" id="chargeBar"></div></div>
+          <div id="chargeText" style="margin-top:8px; font-size:12px; font-weight:700; color:#36547d;">Not charging</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Multi-Stop Task Queue</div>
+      <div class="queue-list" id="queueList"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Top View Mini Map</div>
+      <canvas id="miniMap" width="360" height="250"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#1d4ed8"></i>Main AGV</span>
+        <span><i class="dot" style="background:#10b981"></i>AGV-2</span>
+        <span><i class="dot" style="background:#f43f5e"></i>AGV-3</span>
+        <span><i class="dot" style="background:#22c55e"></i>Pickup</span>
+        <span><i class="dot" style="background:#f59e0b"></i>Drop</span>
+        <span><i class="dot" style="background:#38bdf8"></i>Charge</span>
+        <span><i class="dot" style="background:#f59e0b"></i>Forklift</span>
+        <span><i class="dot" style="background:#ef4444"></i>Worker</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel bottom-panel mobile-section" id="section-status">
+    <h3>Live Status</h3>
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-title">Velocity</div><div class="stat-value" id="speedStat">0</div></div>
+      <div class="stat"><div class="stat-title">Sensor</div><div class="stat-value" id="distanceStat">0</div></div>
+      <div class="stat"><div class="stat-title">Heading</div><div class="stat-value" id="headingStat">0°</div></div>
+      <div class="stat"><div class="stat-title">Obstacle</div><div class="stat-value" id="obstacleStat">No</div></div>
+      <div class="stat"><div class="stat-title">Task Stage</div><div class="stat-value" id="stageStat">Idle</div></div>
+      <div class="stat"><div class="stat-title">Payload</div><div class="stat-value" id="payloadStat">Empty</div></div>
+    </div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+  <div class="mobile-bottom-nav" id="mobileBottomNav">
+    <button class="active" data-target="scene">Scene</button>
+    <button data-target="controls">Controls</button>
+    <button data-target="telemetry">Telemetry</button>
+    <button data-target="status">Status</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+try {
+  const container = document.getElementById("scene-container");
+  const miniMap = document.getElementById("miniMap");
+  const miniCtx = miniMap.getContext("2d");
+
+  let audioCtx = null;
+  let soundEnabled = false;
+  let cameraMode = "follow";
+  let cameraZoomBoost = 0;
+  let warningBlink = 0;
+  let showRays = true;
+  let trailEnabled = true;
+
+  function unlockAudio() {
+    if (soundEnabled) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+      soundEnabled = true;
+    } catch (e) {}
+  }
+
+  function playTone(freq=880, dur=0.12, vol=0.04, type="square") {
+    if (!soundEnabled || !audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(vol, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + dur + 0.02);
+  }
+  function playWarningBeep() { playTone(880, 0.16, 0.045, "square"); }
+  function playReverseBeep() { playTone(540, 0.10, 0.03, "square"); }
+
+  function addLog(message) {
+    const box = document.getElementById("logBox");
+    const row = document.createElement("div");
+    row.className = "log-item";
+    row.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    box.prepend(row);
+    while (box.children.length > 120) box.removeChild(box.lastChild);
+  }
+
+  function normalizeAngle(deg) { let d = deg % 360; if (d < 0) d += 360; return d; }
+  function shortestSignedAngle(current, target) {
+    let diff = target - current;
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+    return diff;
+  }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xeaf1f8);
+  scene.fog = new THREE.Fog(0xeaf1f8, 25, 110);
+
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 260);
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.86));
+  const hemi = new THREE.HemisphereLight(0xf7fbff, 0xaab9cc, 0.82);
+  scene.add(hemi);
+
+  const fillLight = new THREE.DirectionalLight(0xeaf4ff, 0.55);
+  fillLight.position.set(-22, 18, -12);
+  scene.add(fillLight);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 1.85);
+  sun.position.set(18, 32, 16);
+  sun.castShadow = true;
+  sun.shadow.mapSize.width = 4096;
+  sun.shadow.mapSize.height = 4096;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 120;
+  sun.shadow.camera.left = -50;
+  sun.shadow.camera.right = 50;
+  sun.shadow.camera.top = 50;
+  sun.shadow.camera.bottom = -50;
+  scene.add(sun);
+
+  // Textured warehouse floor
+  function createFloorTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024; canvas.height = 1024;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#d8e1eb";
+    ctx.fillRect(0,0,1024,1024);
+    for (let x=0; x<1024; x+=64) {
+      for (let y=0; y<1024; y+=64) {
+        ctx.fillStyle = (x/64 + y/64) % 2 ? "#d6dee8" : "#dce5ef";
+        ctx.fillRect(x, y, 64, 64);
+        ctx.strokeStyle = "#c5d2df";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, 64, 64);
+      }
+    }
+    // worn tire marks
+    ctx.globalAlpha = 0.14;
+    ctx.strokeStyle = "#7a8898";
+    ctx.lineWidth = 6;
+    for (let i=0;i<8;i++) {
+      ctx.beginPath();
+      ctx.moveTo(80, 80 + i*110);
+      ctx.bezierCurveTo(250, 100 + i*105, 760, 120 + i*115, 940, 90 + i*110);
+      ctx.stroke();
+    }
+    return new THREE.CanvasTexture(canvas);
+  }
+  const floorTex = createFloorTexture();
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+  floorTex.repeat.set(2,2);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(68, 68),
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.98 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  scene.add(new THREE.GridHelper(64, 32, 0xb8c9dd, 0xcfdceb));
+
+  // Walls and doors
+  const wallMat = new THREE.MeshStandardMaterial({ color:0xc9d3df, roughness:0.95 });
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(64, 10, 0.6), wallMat);
+  backWall.position.set(0, 5, -32); backWall.receiveShadow = true; scene.add(backWall);
+  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 10, 64), wallMat);
+  leftWall.position.set(-32, 5, 0); leftWall.receiveShadow = true; scene.add(leftWall);
+  const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 10, 64), wallMat);
+  rightWall.position.set(32, 5, 0); rightWall.receiveShadow = true; scene.add(rightWall);
+
+  const dockDoors = [];
+  function addDockDoor(x, z, label) {
+    const g = new THREE.Group();
+
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(5.0, 4.7, 0.22),
+      new THREE.MeshStandardMaterial({ color:0x64748b, metalness:0.18, roughness:0.62 })
+    );
+    frame.position.y = 2.15; frame.position.z = -0.05;
+    g.add(frame);
+
+    const shutterMat = new THREE.MeshStandardMaterial({ color:0x9fb2c8, roughness:0.54, metalness:0.25 });
+    const shutter = new THREE.Group();
+    for (let i = 0; i < 7; i++) {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(4.55, 0.54, 0.12), shutterMat);
+      slat.position.y = 4.0 - i * 0.56;
+      shutter.add(slat);
+    }
+    g.add(shutter);
+
+    const hood = new THREE.Mesh(
+      new THREE.BoxGeometry(4.7, 0.35, 0.45),
+      new THREE.MeshStandardMaterial({ color:0x7b8ba1, metalness:0.2, roughness:0.55 })
+    );
+    hood.position.set(0, 4.55, -0.12);
+    g.add(hood);
+
+    const dockLight = new THREE.PointLight(0xeaf4ff, 0.55, 9, 2);
+    dockLight.position.set(0, 4.2, 1.0);
+    g.add(dockLight);
+
+    const txt = makeTextSprite(label, "#163d75", 200, 46);
+    txt.position.set(0, 5.1, 0);
+    g.add(txt);
+
+    g.position.set(x, 0, z);
+    scene.add(g);
+    dockDoors.push({ group:g, shutter, phase:Math.random() * Math.PI * 2 });
+  }
+  addDockDoor(-22, -31.6, "Dock-A");
+  addDockDoor(22, -31.6, "Dock-B");
+
+  // Warehouse props for more realism
+  function addColumn(x, z) {
+    const col = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 8, 0.8),
+      new THREE.MeshStandardMaterial({ color:0xb9c7d6, roughness:0.9 })
+    );
+    col.position.set(x,4,z);
+    col.castShadow = true; col.receiveShadow = true;
+    scene.add(col);
+  }
+  addColumn(-30, -30); addColumn(30, -30); addColumn(-30, 30); addColumn(30, 30);
+
+  function addCeilingLamp(x, z) {
+    const lamp = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2,0.18,0.7),
+      new THREE.MeshStandardMaterial({ color:0xe2e8f0, emissive:0xeaf4ff, emissiveIntensity:0.35 })
+    );
+    lamp.position.set(x,8.8,z);
+    scene.add(lamp);
+    const light = new THREE.PointLight(0xf8fbff, 0.45, 18, 2);
+    light.position.set(x,8.2,z);
+    scene.add(light);
+  }
+  for (let x=-20; x<=20; x+=20) for (let z=-20; z<=20; z+=20) addCeilingLamp(x,z);
+
+  function addSafetyBarrier(x, z, rot=0) {
+    const g = new THREE.Group();
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(3.0,0.22,0.22),
+      new THREE.MeshStandardMaterial({ color:0xfacc15, metalness:0.1, roughness:0.55 })
+    );
+    rail.position.y = 0.65; g.add(rail);
+    const post1 = new THREE.Mesh(new THREE.BoxGeometry(0.16,1.0,0.16), new THREE.MeshStandardMaterial({ color:0x64748b }));
+    post1.position.set(-1.35,0.5,0); g.add(post1);
+    const post2 = post1.clone(); post2.position.x = 1.35; g.add(post2);
+    g.position.set(x,0,z); g.rotation.y = rot;
+    g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+    scene.add(g);
+  }
+  addSafetyBarrier(-26, -14, Math.PI/2);
+  addSafetyBarrier(26, 8, Math.PI/2);
+
+  function addAisleLine(x, z, w, d, color=0xfacc15) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.03, d),
+      new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:0.18 })
+    );
+    m.position.set(x, 0.02, z); m.receiveShadow = true; scene.add(m);
+  }
+  addAisleLine(0, -20, 54, 0.18);
+  addAisleLine(0, 0, 54, 0.18);
+  addAisleLine(0, 20, 54, 0.18);
+  addAisleLine(-22, 0, 0.18, 54);
+  addAisleLine(22, 0, 0.18, 54);
+
+  // Stop lines and pedestrian crossing
+  const stopLines = [
+    { x:-22, z:0, axis:"x" }, { x:22, z:0, axis:"x" }, { x:0, z:-20, axis:"z" }, { x:0, z:20, axis:"z" }
+  ];
+  function addStopLine(s) {
+    if (s.axis === "x") addAisleLine(s.x, s.z, 4.4, 0.12, 0xffffff);
+    else addAisleLine(s.x, s.z, 0.12, 4.4, 0xffffff);
+  }
+  stopLines.forEach(addStopLine);
+
+  const crossingMat = new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xffffff, emissiveIntensity:0.12 });
+  for (let i=0;i<7;i++) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.03, 4.2), crossingMat);
+    stripe.position.set(-22 + i*0.8 - 2.4, 0.03, 12);
+    stripe.receiveShadow = true;
+    scene.add(stripe);
+  }
+  const crossingLabel = makeTextSprite("Pedestrian Crossing", "#b91c1c", 260, 42);
+  crossingLabel.position.set(-22, 2.1, 14.5);
+  scene.add(crossingLabel);
+
+  // Conveyors and packages
+  const conveyorBelts = [];
+  const conveyorPackages = [];
+  function addConveyor(x, z, w, d, dir="x") {
+    const group = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w,0.22,d), new THREE.MeshStandardMaterial({ color:0x4b5563, roughness:0.8, metalness:0.2 }));
+    base.position.y = 0.11; base.receiveShadow = true; group.add(base);
+
+    const stripeMat = new THREE.MeshStandardMaterial({ color:0x93c5fd, emissive:0x60a5fa, emissiveIntensity:0.35 });
+    const stripeCount = Math.max(6, Math.floor((dir==="x"?w:d)/1.6));
+    for (let i=0;i<stripeCount;i++) {
+      const stripe = new THREE.Mesh(
+        new THREE.BoxGeometry(dir==="x"?0.85:w-0.22, 0.04, dir==="x"?d-0.22:0.85),
+        stripeMat
+      );
+      stripe.position.y = 0.24;
+      if (dir==="x") stripe.position.x = -w/2 + 0.8 + i*1.4;
+      else stripe.position.z = -d/2 + 0.8 + i*1.4;
+      group.add(stripe);
+      conveyorBelts.push({ stripe, dir, span: dir==="x"?w:d });
+    }
+
+    for (let i=0;i<3;i++) {
+      const pack = new THREE.Mesh(
+        new THREE.BoxGeometry(0.7,0.5,0.7),
+        new THREE.MeshStandardMaterial({ color:i%2?0xeab308:0x16a34a })
+      );
+      pack.position.set(dir==="x"?(-w/2 + 0.8 + i*2.5):0, 0.5, dir==="x"?0:(-d/2 + 0.8 + i*2.5));
+      pack.castShadow = true; pack.receiveShadow = true; group.add(pack);
+      conveyorPackages.push({ pack, dir, span: dir==="x"?w:d, localX:pack.position.x, localZ:pack.position.z });
+    }
+    group.position.set(x,0,z);
+    scene.add(group);
+  }
+  addConveyor(-24,-26,10,2.2,"x");
+  addConveyor(24,-26,10,2.2,"x");
+  addConveyor(0,26,14,2.2,"x");
+  addConveyor(-28,0,2.2,12,"z");
+
+  // Safety lights
+  const safetyLights = [];
+  function addSafetyBeacon(x,z) {
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.6,12), new THREE.MeshStandardMaterial({ color:0x64748b, metalness:0.35, roughness:0.6 }));
+    pole.position.y = 1.3; g.add(pole);
+    const domeMat = new THREE.MeshStandardMaterial({ color:0xfbbf24, emissive:0xf59e0b, emissiveIntensity:0.4 });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.24,18,18), domeMat);
+    dome.position.y = 2.75; g.add(dome);
+    const light = new THREE.PointLight(0xf59e0b, 1.2, 9, 2); light.position.y = 2.75; g.add(light);
+    g.position.set(x,0,z); scene.add(g); safetyLights.push({ domeMat, light });
+  }
+  [[-28,-28],[28,-28],[-28,28],[28,28],[0,-28],[0,28]].forEach(p => addSafetyBeacon(...p));
+
+  // Zones
+  function createZone(x,z,color,label) {
+    const group = new THREE.Group();
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(4.6,0.2,4.6), new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:0.22 }));
+    pad.position.y = 0.1; group.add(pad);
+    const marker = new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.55,0.36,24), new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xbfc9d7, emissiveIntensity:0.25 }));
+    marker.position.set(0,0.35,0); group.add(marker);
+    const sprite = makeTextSprite(label, "#163d75", 220, 54); sprite.position.set(0,2.6,0); group.add(sprite);
+    group.position.set(x,0,z); group.userData.label = label; scene.add(group); return group;
+  }
+  const pickupA = createZone(-22,-20,0x22c55e,"Pickup-A");
+  const dropB = createZone(22,18,0xf59e0b,"Drop-B");
+  const loadingBay = createZone(22,-20,0x60a5fa,"Bay");
+  const chargeDock = createZone(-22,18,0x38bdf8,"Charge");
+
+  // Box stacks and pallets
+  const loosePallets = [];
+  function createPallet(color=0x8b5a2b) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color, roughness:0.82, metalness:0.04 });
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.15,0.08,1.0), mat);
+    top.position.y = 0.22; g.add(top);
+    [-0.4,0,0.4].forEach(z=>{
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(1.15,0.05,0.12), mat);
+      slat.position.set(0,0.29,z); g.add(slat);
+    });
+    [-0.35,0.35].forEach(x=>{
+      const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.18,0.18), mat);
+      leg1.position.set(x,0.09,-0.35); g.add(leg1);
+      const leg2 = leg1.clone(); leg2.position.z = 0.35; g.add(leg2);
+    });
+    return g;
+  }
+  function createBoxStack(baseX, baseZ, rows, cols, levels, color, withPallet=false) {
+    const g = new THREE.Group();
+    if (withPallet) {
+      const pallet = createPallet();
+      g.add(pallet);
+      loosePallets.push({ group:g, pallet, x:baseX, z:baseZ });
+    }
+    const mat = new THREE.MeshStandardMaterial({ color });
+    const size=1.0, gap=0.12;
+    for (let l=0;l<levels;l++) for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(size,size,size), mat);
+      box.castShadow = true; box.receiveShadow = true;
+      box.position.set(c*(size+gap), size/2 + l*(size+0.03) + 0.32, r*(size+gap));
+      g.add(box);
+    }
+    g.position.set(baseX,0,baseZ); scene.add(g);
+  }
+  createBoxStack(-24,-22,2,2,2,0x22c55e, true);
+  createBoxStack(20,15,2,3,2,0xf59e0b, true);
+  createBoxStack(20,-22,2,2,3,0x60a5fa, true);
+
+  // Shelves with labels and bay numbers
+  const shelves = [];
+  function makeTextSprite(text, colorHex, w=220, h=56) {
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgba(255,255,255,.92)";
+    ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 2; ctx.strokeRect(0,0,w,h);
+    ctx.fillStyle = colorHex; ctx.font = "bold " + Math.floor(h*0.45) + "px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, w/2, h/2);
+    const tex = new THREE.CanvasTexture(canvas);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true }));
+    sp.scale.set(w/70, h/70, 1);
+    return sp;
+  }
+  function addRackPosts(x,z,w,d) {
+    const postMat = new THREE.MeshStandardMaterial({ color:0xff8a00, metalness:0.2, roughness:0.5 });
+    const pos=[[x-w/2,z-d/2],[x+w/2,z-d/2],[x-w/2,z+d/2],[x+w/2,z+d/2]];
+    pos.forEach(([px,pz])=>{
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.18,4.2,0.18), postMat);
+      post.position.set(px,2.1,pz); post.castShadow = true; scene.add(post);
+    });
+  }
+  function addDangerStripes(x,z,w,d) {
+    for (let i=0;i<7;i++) {
+      const stripe = new THREE.Mesh(
+        new THREE.BoxGeometry(w/7,0.03,d),
+        new THREE.MeshStandardMaterial({ color:i%2?0x111827:0xfacc15, emissive:i%2?0x111827:0xfacc15, emissiveIntensity:0.08 })
+      );
+      stripe.position.set(x - w/2 + (i+0.5)*(w/7), 0.03, z);
+      stripe.receiveShadow = true;
+      scene.add(stripe);
+    }
+  }
+  function createShelf(x,z,w,d,h,label) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({ color:0x71829a }));
+    body.position.y = h/2; body.castShadow = true; body.receiveShadow = true; g.add(body);
+    const spr = makeTextSprite(label, "#163d75", 92, 26);
+    spr.position.set(0, h + 0.65, 0); g.add(spr);
+    g.position.set(x,0,z); g.userData = { w,d,h,label }; scene.add(g); shelves.push(g);
+    addRackPosts(x,z,w,d);
+    addDangerStripes(x, z + d/2 + 1.1, Math.max(3,w), 0.7);
+  }
+  createShelf(-12,-12,7,2.7,4,"R-A1");
+  createShelf(-2,-4,3,10,4,"R-B1");
+  createShelf(11,-12,7,2.7,4,"R-C1");
+  createShelf(-14,8,8,2.5,4,"R-D1");
+  createShelf(0,12,3,10,4,"R-E1");
+  createShelf(14,8,8,2.5,4,"R-F1");
+  const originalShelfPositions = shelves.map(s => ({ x:s.position.x, z:s.position.z, rot:s.rotation.y || 0, label:s.userData.label }));
+
+  // Forklifts
+  const forklifts = [];
+  function createForklift(color=0xf59e0b) {
+    const group = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.9,0.5,1.25), new THREE.MeshStandardMaterial({ color, roughness:0.45, metalness:0.15 }));
+    base.position.y = 0.48; group.add(base);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.95,0.85,1.05), new THREE.MeshStandardMaterial({ color:0x111827, roughness:0.5 }));
+    cabin.position.set(-0.15,1.02,0); group.add(cabin);
+    const mast1 = new THREE.Mesh(new THREE.BoxGeometry(0.08,1.8,0.08), new THREE.MeshStandardMaterial({ color:0x374151, metalness:0.25, roughness:0.55 }));
+    mast1.position.set(0.72,1.3,-0.32); const mast2 = mast1.clone(); mast2.position.z=0.32; group.add(mast1,mast2);
+    const forkBar = new THREE.Mesh(new THREE.BoxGeometry(0.10,0.28,0.92), new THREE.MeshStandardMaterial({ color:0x475569 }));
+    forkBar.position.set(0.78,0.72,0); group.add(forkBar);
+    const fork1 = new THREE.Mesh(new THREE.BoxGeometry(0.75,0.05,0.18), new THREE.MeshStandardMaterial({ color:0x94a3b8 }));
+    fork1.position.set(1.15,0.44,-0.22); const fork2=fork1.clone(); fork2.position.z=0.22; group.add(fork1,fork2);
+    [[-0.58,-0.48],[-0.58,0.48],[0.48,-0.48],[0.48,0.48]].forEach(([x,z])=>{
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.16,18), new THREE.MeshStandardMaterial({ color:0x111827 }));
+      wheel.rotation.z = Math.PI/2; wheel.position.set(x,0.2,z); group.add(wheel);
+    });
+    group.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+    return group;
+  }
+  function addForkliftPath(id,color,startX,startZ,points) {
+    const mesh = createForklift(color);
+    mesh.position.set(startX,0,startZ); scene.add(mesh);
+    forklifts.push({ id, mesh, path:points, index:0, x:startX, z:startZ, heading:0, speed:1.0 + Math.random()*0.25, pause:0 });
+  }
+  addForkliftPath("FL-1",0xf59e0b,-24,24,[new THREE.Vector3(-24,0,24), new THREE.Vector3(-8,0,24), new THREE.Vector3(-8,0,10), new THREE.Vector3(-24,0,10)]);
+  addForkliftPath("FL-2",0xeab308,24,24,[new THREE.Vector3(24,0,24), new THREE.Vector3(8,0,24), new THREE.Vector3(8,0,6), new THREE.Vector3(24,0,6)]);
+
+  // Workers
+  const workers = [];
+  function createWorker() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22,0.8,4,10), new THREE.MeshStandardMaterial({ color:0xef4444 }));
+    body.position.y = 1.0; g.add(body);
+    const vest = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.42,0.28), new THREE.MeshStandardMaterial({ color:0xfacc15, emissive:0xeab308, emissiveIntensity:0.18 }));
+    vest.position.y = 1.0; g.add(vest);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22,18,18), new THREE.MeshStandardMaterial({ color:0xf1c27d }));
+    head.position.y = 1.72; g.add(head);
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.23,18,18,0,Math.PI*2,0,Math.PI/2), new THREE.MeshStandardMaterial({ color:0xfacc15 }));
+    helmet.position.y = 1.86; g.add(helmet);
+    g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+    return g;
+  }
+  function addWorker(id,x,z,points) {
+    const mesh = createWorker();
+    mesh.position.set(x,0,z); scene.add(mesh);
+    workers.push({ id, mesh, x, z, heading:0, path:points, index:0, speed:0.55 + Math.random()*0.15 });
+  }
+  addWorker("WK-1",-6,22,[new THREE.Vector3(-6,0,22), new THREE.Vector3(6,0,22), new THREE.Vector3(6,0,16), new THREE.Vector3(-6,0,16)]);
+  addWorker("WK-2",18,-8,[new THREE.Vector3(18,0,-8), new THREE.Vector3(24,0,-8), new THREE.Vector3(24,0,-2), new THREE.Vector3(18,0,-2)]);
+
+  function shelfCollision(x,z,inflate=0.5) {
+    const agvHalfW=1.2, agvHalfD=1.0;
+    for (const shelf of shelves) {
+      const w = shelf.userData.w/2 + agvHalfW + inflate;
+      const d = shelf.userData.d/2 + agvHalfD + inflate;
+      if (Math.abs(x-shelf.position.x)<w && Math.abs(z-shelf.position.z)<d) return shelf;
+    }
+    return null;
+  }
+  function forkliftCollision(x,z,inflate=0.2) {
+    for (const fl of forklifts) if (Math.abs(x-fl.x)<1.25+inflate && Math.abs(z-fl.z)<0.95+inflate) return fl;
+    return null;
+  }
+  function workerCollision(x,z,inflate=0.25) {
+    for (const wk of workers) if (Math.abs(x-wk.x)<0.45+inflate && Math.abs(z-wk.z)<0.45+inflate) return wk;
+    return null;
+  }
+
+  function rayDistance(angleDeg,maxDist) {
+    const rad = THREE.MathUtils.degToRad(angleDeg);
+    const step = 0.20;
+    for (let d=0; d<=maxDist; d+=step) {
+      const px = robotState.x + Math.cos(rad)*d;
+      const pz = robotState.z + Math.sin(rad)*d;
+      if (px<-30 || px>30 || pz<-30 || pz>30) return d;
+      if (shelfCollision(px,pz,0.2) || forkliftCollision(px,pz,0.2) || workerCollision(px,pz,0.25)) return d;
+    }
+    return maxDist;
+  }
+  function rayPoint(angleDeg,dist) {
+    const rad = THREE.MathUtils.degToRad(angleDeg);
+    return new THREE.Vector3(robotState.x + Math.cos(rad)*dist, 0.1, robotState.z + Math.sin(rad)*dist);
+  }
+
+  function createAgvModel(color,labelText) {
+    const agv = new THREE.Group();
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.5,0.5,1.9), new THREE.MeshStandardMaterial({ color:0x111827, roughness:0.55 }));
+    chassis.position.y = 0.45; agv.add(chassis);
+
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(2.35,0.9,1.75),
+      new THREE.MeshPhysicalMaterial({ color, metalness:0.38, roughness:0.28, clearcoat:0.65, clearcoatRoughness:0.18 })
+    );
+    body.position.y = 1.05; agv.add(body);
+
+    const bodyStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(1.9,0.14,1.78),
+      new THREE.MeshStandardMaterial({ color:0xe5eefb, metalness:0.15, roughness:0.45 })
+    );
+    bodyStripe.position.set(0,1.42,0);
+    agv.add(bodyStripe);
+
+    const brakeLeftMat = new THREE.MeshStandardMaterial({ color:0x331111, emissive:0x000000, emissiveIntensity:0 });
+    const brakeRightMat = brakeLeftMat.clone();
+    const brakeLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.18), brakeLeftMat); brakeLeft.position.set(-1.2,1.0,-0.45); agv.add(brakeLeft);
+    const brakeRight = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.18), brakeRightMat); brakeRight.position.set(-1.2,1.0,0.45); agv.add(brakeRight);
+
+    const liftFrame = new THREE.Group(); agv.add(liftFrame);
+    const platform = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1,0.16,1.1),
+      new THREE.MeshPhysicalMaterial({ color:0xc5ced8, metalness:0.45, roughness:0.28, clearcoat:0.3 })
+    );
+    platform.position.set(0.2,1.45,0); liftFrame.add(platform);
+
+    // forks that extend into pallet
+    const forkGroup = new THREE.Group(); liftFrame.add(forkGroup);
+    const fork1 = new THREE.Mesh(new THREE.BoxGeometry(0.95,0.05,0.16), new THREE.MeshStandardMaterial({ color:0x94a3b8 }));
+    fork1.position.set(0.85,1.15,-0.22);
+    const fork2 = fork1.clone(); fork2.position.z = 0.22;
+    forkGroup.add(fork1, fork2);
+
+    const top = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2,0.35,1.0),
+      new THREE.MeshPhysicalMaterial({ color:0x0f172a, metalness:0.4, roughness:0.22, clearcoat:0.4 })
+    );
+    top.position.set(0,1.55,0); agv.add(top);
+
+    const lidar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18,0.18,0.12,24),
+      new THREE.MeshStandardMaterial({ color:0xe2e8f0, metalness:0.3, roughness:0.25 })
+    );
+    lidar.position.set(0,1.86,0);
+    agv.add(lidar);
+
+    const sensorCone = new THREE.Mesh(new THREE.ConeGeometry(1.8,5.4,32,1,true), new THREE.MeshBasicMaterial({ color:0x19c37d, transparent:true, opacity:0.14, side:THREE.DoubleSide, depthWrite:false }));
+    sensorCone.rotation.z = -Math.PI/2; sensorCone.position.set(2.9,1.1,0); agv.add(sensorCone);
+
+    const label = makeTextSprite(labelText, "#" + new THREE.Color(color).getHexString(), 220, 56);
+    label.position.set(0,3.0,0); agv.add(label);
+
+    const payload = new THREE.Group();
+    const pallet = createPallet(); payload.add(pallet);
+
+    const cartonMat = new THREE.MeshPhysicalMaterial({ color:0xc9733d, roughness:0.72, metalness:0.02, clearcoat:0.08 });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), cartonMat);
+    box.position.y = 0.78; payload.add(box);
+
+    const band1 = new THREE.Mesh(new THREE.BoxGeometry(0.92,0.10,0.08), new THREE.MeshStandardMaterial({ color:0xffffff }));
+    band1.position.set(0,1.0,0.46); payload.add(band1);
+    const band2 = band1.clone(); band2.position.z = -0.46; payload.add(band2);
+
+    const topLabel = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.38,0.20),
+      new THREE.MeshBasicMaterial({ color:0xf8fafc })
+    );
+    topLabel.rotation.x = -Math.PI/2;
+    topLabel.position.set(0,1.24,0);
+    payload.add(topLabel);
+
+    payload.position.set(0.35,1.05,0);
+    payload.visible = false;
+    liftFrame.add(payload);
+
+    const wheelMat = new THREE.MeshStandardMaterial({ color:0x111827 });
+    const steerParents = [];
+    const wheelMeshes = [];
+    function addWheel(x,z,front=false) {
+      const parent = new THREE.Group();
+      parent.position.set(x,0.32,z);
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,0.18,20), wheelMat);
+      wheel.rotation.z = Math.PI/2;
+      parent.add(wheel);
+      agv.add(parent);
+      wheelMeshes.push(wheel);
+      if (front) steerParents.push(parent);
+    }
+    addWheel(-0.95,-0.98);
+    addWheel(-0.95,0.98);
+    addWheel(0.95,-0.98,true);
+    addWheel(0.95,0.98,true);
+
+    agv.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+    return { agv, sensorCone, liftFrame, payload, forkGroup, wheelMeshes, steerParents, brakeLeftMat, brakeRightMat };
+  }
+
+  const main = createAgvModel(0x1d4ed8,"AGV-1");
+  const robot = main.agv;
+  const sensorCone = main.sensorCone;
+  const liftFrame = main.liftFrame;
+  const payload = main.payload;
+  const forkGroup = main.forkGroup;
+  const wheelMeshes = main.wheelMeshes;
+  const steerParents = main.steerParents;
+  const brakeLeftMat = main.brakeLeftMat;
+  const brakeRightMat = main.brakeRightMat;
+  robot.position.set(-22,0,-20);
+  scene.add(robot);
+
+  function createSupportAgv(id,color,startX,startZ,points) {
+    const obj = createAgvModel(color,id);
+    obj.agv.position.set(startX,0,startZ); scene.add(obj.agv);
+    return { id, mesh:obj.agv, wheels:obj.wheelMeshes, path:points, index:0, speed:1.2, x:startX, z:startZ, heading:0, color:"#"+new THREE.Color(color).getHexString() };
+  }
+  const supportAgvs = [
+    createSupportAgv("AGV-2",0x10b981,-16,14,[new THREE.Vector3(-16,0,14),new THREE.Vector3(10,0,14),new THREE.Vector3(10,0,20),new THREE.Vector3(-16,0,20)]),
+    createSupportAgv("AGV-3",0xf43f5e,14,-2,[new THREE.Vector3(14,0,-2),new THREE.Vector3(14,0,10),new THREE.Vector3(8,0,10),new THREE.Vector3(8,0,-2)])
+  ];
+
+  const rayFront = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color:0xff4d4d, transparent:true, opacity:0.82 }));
+  const rayLeft = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color:0xf59e0b, transparent:true, opacity:0.82 }));
+  const rayRight = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color:0x10b981, transparent:true, opacity:0.82 }));
+  scene.add(rayFront, rayLeft, rayRight);
+
+  const collisionLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color:0xff4d4d, transparent:true, opacity:0.85 }));
+  scene.add(collisionLine);
+
+  const routeLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color:0x2563eb, dashSize:0.7, gapSize:0.28 }));
+  scene.add(routeLine);
+
+  const trailPoints = [];
+  const trailLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color:0x2468f2, transparent:true, opacity:0.35 }));
+  scene.add(trailLine);
+
+  const CELL = 2, GRID_MIN = -30, GRID_MAX = 30, GRID_SIZE = Math.round((GRID_MAX - GRID_MIN) / CELL);
+  function worldToGrid(x,z){ return { gx:Math.max(0,Math.min(GRID_SIZE-1,Math.floor((x-GRID_MIN)/CELL))), gz:Math.max(0,Math.min(GRID_SIZE-1,Math.floor((z-GRID_MIN)/CELL))) }; }
+  function gridToWorld(gx,gz){ return { x: GRID_MIN + gx*CELL + CELL/2, z: GRID_MIN + gz*CELL + CELL/2 }; }
+
+  function buildBlockedGrid() {
+    const grid = Array.from({length:GRID_SIZE},()=>Array(GRID_SIZE).fill(0));
+    for (const shelf of shelves) {
+      const halfW = shelf.userData.w/2 + 1.0, halfD = shelf.userData.d/2 + 1.0;
+      const minX = shelf.position.x-halfW, maxX=shelf.position.x+halfW;
+      const minZ = shelf.position.z-halfD, maxZ=shelf.position.z+halfD;
+      for (let gx=0;gx<GRID_SIZE;gx++) for (let gz=0;gz<GRID_SIZE;gz++) {
+        const p = gridToWorld(gx,gz);
+        if (p.x>=minX && p.x<=maxX && p.z>=minZ && p.z<=maxZ) grid[gx][gz]=1;
+      }
+    }
+    // temporary dynamic obstacles: forklifts, workers, reserved aisle
+    forklifts.forEach(fl => markDynamicObstacle(grid, fl.x, fl.z, 1.3));
+    workers.forEach(wk => markDynamicObstacle(grid, wk.x, wk.z, 0.8));
+    if (robotState.reservedAisle) {
+      const r = robotState.reservedAisle;
+      for (let gx=0;gx<GRID_SIZE;gx++) for (let gz=0;gz<GRID_SIZE;gz++) {
+        const p = gridToWorld(gx,gz);
+        if (p.x >= r.minX && p.x <= r.maxX && p.z >= r.minZ && p.z <= r.maxZ) {
+          // keep only as hint, not hard block for current robot
+        }
+      }
+    }
+    return grid;
+  }
+
+  function markDynamicObstacle(grid, x, z, radius) {
+    for (let gx=0;gx<GRID_SIZE;gx++) for (let gz=0;gz<GRID_SIZE;gz++) {
+      const p = gridToWorld(gx,gz);
+      if (Math.hypot(p.x-x, p.z-z) < radius) grid[gx][gz] = 1;
+    }
+  }
+
+  function astar(start, goal, blocked) {
+    const key=(x,z)=>`${x},${z}`;
+    const open=new Map(), came=new Map(), gScore=new Map(), fScore=new Map();
+    const dirs=[{x:1,z:0},{x:-1,z:0},{x:0,z:1},{x:0,z:-1},{x:1,z:1},{x:1,z:-1},{x:-1,z:1},{x:-1,z:-1}];
+    function heuristic(a,b){ return Math.hypot(a.gx-b.gx,a.gz-b.gz); }
+    const sKey=key(start.gx,start.gz); open.set(sKey,start); gScore.set(sKey,0); fScore.set(sKey,heuristic(start,goal));
+
+    while(open.size){
+      let currentKey=null,currentNode=null,bestF=Infinity;
+      for (const [k,node] of open.entries()) { const fv=fScore.get(k) ?? Infinity; if (fv<bestF){ bestF=fv; currentKey=k; currentNode=node; } }
+      if (currentNode.gx===goal.gx && currentNode.gz===goal.gz){
+        const path=[]; let ck=currentKey;
+        while(ck){ const [gx,gz]=ck.split(",").map(Number); path.push({gx,gz}); ck=came.get(ck); }
+        return path.reverse();
+      }
+      open.delete(currentKey);
+      for (const d of dirs){
+        const nx=currentNode.gx+d.x, nz=currentNode.gz+d.z;
+        if (nx<0||nz<0||nx>=GRID_SIZE||nz>=GRID_SIZE) continue;
+        if (blocked[nx][nz]) continue;
+        const nk=key(nx,nz), cost=Math.hypot(d.x,d.z);
+        const tentative=(gScore.get(currentKey) ?? Infinity)+cost;
+        if (tentative < (gScore.get(nk) ?? Infinity)){
+          came.set(nk,currentKey); gScore.set(nk,tentative);
+          fScore.set(nk,tentative+heuristic({gx:nx,gz:nz},goal)); open.set(nk,{gx:nx,gz:nz});
+        }
+      }
+    }
+    return [];
+  }
+
+  function smoothPath(points) {
+    if (points.length < 3) return points;
+    const out=[points[0]];
+    for (let i=1;i<points.length-1;i++){
+      const a=points[i-1], b=points[i], c=points[i+1];
+      out.push({ x:(a.x+2*b.x+c.x)/4, z:(a.z+2*b.z+c.z)/4 });
+    }
+    out.push(points[points.length-1]);
+    return out;
+  }
+  function computePathTo(tx,tz){
+    const blocked=buildBlockedGrid();
+    const start=worldToGrid(robotState.x,robotState.z);
+    const goal=worldToGrid(tx,tz);
+    blocked[start.gx][start.gz]=0; blocked[goal.gx][goal.gz]=0;
+    return smoothPath(astar(start,goal,blocked).map(p=>gridToWorld(p.gx,p.gz)));
+  }
+
+  function getLookaheadPoint() {
+    if (!robotState.path.length) return null;
+    let best = robotState.path[Math.min(robotState.pathIndex, robotState.path.length-1)];
+    for (let i=robotState.pathIndex;i<robotState.path.length;i++){
+      const p=robotState.path[i], d=Math.hypot(p.x-robotState.x,p.z-robotState.z);
+      best=p; if (d>=robotState.lookahead) return p;
+    }
+    return best;
+  }
+  function advancePathIndex() {
+    while(robotState.pathIndex < robotState.path.length-1){
+      const p=robotState.path[robotState.pathIndex], d=Math.hypot(p.x-robotState.x,p.z-robotState.z);
+      if (d<1.5) robotState.pathIndex += 1; else break;
+    }
+  }
+
+  function makeTask(id,type,x,z,needsLift=false){ return { id,type,x,z,needsLift,status:"queued" }; }
+  function baseTaskQueue(){ return [makeTask("Pickup-A","pickup",pickupA.position.x,pickupA.position.z,true), makeTask("Drop-B","drop",dropB.position.x,dropB.position.z,true), makeTask("Bay","bay",loadingBay.position.x,loadingBay.position.z,false)]; }
+
+  const robotState = {
+    x:-22, z:-20, heading:0, speed:2.2, turnRate:2.0, sensorRange:10, desiredSpeed:0, lookahead:4.5,
+    battery:100, cmd:"stop", mode:"agv", obstacle:false, distance:0, velocity:0, angularVelocity:0,
+    steering:0, carrying:false, lift:0, liftTarget:0, taskStage:"idle", recoveryMode:false, recoveryPhase:"none",
+    recoveryTimer:0, avoidDirection:1, prevX:-22, prevZ:-20, stuckTime:0, path:[], pathIndex:0,
+    targetName:"Pickup-A", targetPos:{ x:pickupA.position.x, z:pickupA.position.z }, taskQueue:[], taskIndex:0,
+    charging:false, chargeProgress:100, actionCooldown:0, currentJobText:"Waiting", lastPlanKey:"",
+    processTimer:0, emergencyCharge:false, forkExtend:0, forkTarget:0, reservedAisle:null
+  };
+
+  function renderQueue() {
+    const q=document.getElementById("queueList"); q.innerHTML="";
+    if (robotState.emergencyCharge){ const div=document.createElement("div"); div.className="queue-item active"; div.innerHTML=`<span>Emergency Charge</span><span class="status-pill">priority</span>`; q.appendChild(div); }
+    robotState.taskQueue.forEach((task,idx)=>{ const div=document.createElement("div"); const cls=["queue-item"]; if(idx===robotState.taskIndex && robotState.mode==="agv" && !robotState.emergencyCharge) cls.push("active"); if(task.status==="done") cls.push("done"); div.className=cls.join(" "); div.innerHTML=`<span>${idx+1}. ${task.id}</span><span class="status-pill">${task.status}</span>`; q.appendChild(div); });
+  }
+
+  function updatePayloadView() {
+    payload.visible = robotState.carrying;
+    const txt = robotState.carrying ? "Loaded" : "Empty";
+    document.getElementById("loadBadge").textContent = `Load: ${txt}`;
+    document.getElementById("teleLoad").textContent = txt;
+    document.getElementById("payloadStat").textContent = txt;
+  }
+
+  function setButtonStates(mode){
+    document.getElementById("manualBtn").classList.toggle("active",mode==="manual");
+    document.getElementById("autoBtn").classList.toggle("active",mode==="auto");
+    document.getElementById("patrolBtn").classList.toggle("active",mode==="patrol");
+    document.getElementById("agvBtn").classList.toggle("active",mode==="agv");
+  }
+  function setCameraMode(mode){
+    cameraMode = mode;
+    document.getElementById("camFollowBtn").classList.toggle("active", mode==="follow");
+    document.getElementById("camTopBtn").classList.toggle("active", mode==="top");
+    document.getElementById("camDockBtn").classList.toggle("active", mode==="dock");
+  }
+  window.setCameraMode = setCameraMode;
+
+  function setCommand(cmd){
+    robotState.cmd=cmd;
+    if(robotState.mode==="manual") robotState.desiredSpeed = cmd==="forward" ? robotState.speed : (cmd==="backward" ? 1.0 : 0);
+    robotState.recoveryMode=false; robotState.recoveryPhase="none";
+  }
+  window.setCommand=setCommand;
+
+  const patrolPoints=[{x:-24,z:-24},{x:24,z:-24},{x:24,z:24},{x:-24,z:24},{x:0,z:0}];
+  let patrolIndex=0;
+
+  function layoutKey(){ return shelves.map(s=>`${Math.round(s.position.x*10)},${Math.round(s.position.z*10)}`).join("|"); }
+  function assignPathTo(tx,tz,name){
+    const path=computePathTo(tx,tz);
+    if(path.length){
+      robotState.path=path; robotState.pathIndex=0; robotState.targetPos={x:tx,z:tz}; robotState.targetName=name;
+      robotState.lastPlanKey = layoutKey() + "|" + name; addLog(`Path planned to ${name}`);
+    } else addLog(`No path found to ${name}`);
+  }
+
+  function updateAisleReservation() {
+    const nearest = stopLines.find(s => Math.hypot(s.x - robotState.x, s.z - robotState.z) < 4.0);
+    if (nearest) {
+      robotState.reservedAisle = { minX: nearest.x - 3, maxX: nearest.x + 3, minZ: nearest.z - 3, maxZ: nearest.z + 3 };
+    } else {
+      robotState.reservedAisle = null;
+    }
+  }
+
+  function assignCurrentTaskPath() {
+    if (robotState.emergencyCharge || robotState.charging || robotState.battery <= 18) {
+      robotState.emergencyCharge = true;
+      robotState.currentJobText = "Charge Dock";
+      document.getElementById("taskBadge").textContent = "Task: Charge Dock";
+      assignPathTo(chargeDock.position.x, chargeDock.position.z, "Charge Dock");
+      renderQueue();
+      return;
+    }
+    if (!robotState.taskQueue.length){ robotState.taskQueue=baseTaskQueue(); robotState.taskIndex=0; }
+    if (robotState.taskIndex>=robotState.taskQueue.length){ addLog("Queue completed, restarting"); robotState.taskQueue=baseTaskQueue(); robotState.taskIndex=0; }
+    robotState.taskQueue.forEach((t,i)=>{ if(i<robotState.taskIndex) t.status="done"; else if(i===robotState.taskIndex) t.status="active"; else t.status="queued"; });
+    const task=robotState.taskQueue[robotState.taskIndex];
+    robotState.currentJobText=task.id; document.getElementById("taskBadge").textContent=`Task: ${task.id}`;
+    assignPathTo(task.x,task.z,task.id); renderQueue();
+  }
+
+  function maybeRecalculatePath() {
+    if (robotState.mode!=="agv" && robotState.mode!=="patrol") return;
+    const currentKey = layoutKey() + "|" + robotState.targetName;
+    if (currentKey !== robotState.lastPlanKey) { addLog("Obstacle layout changed, replanning"); assignPathTo(robotState.targetPos.x, robotState.targetPos.z, robotState.targetName); }
+  }
+
+  function beginRecovery() {
+    if (robotState.recoveryMode) return;
+    const left = rayDistance(robotState.heading - 55, robotState.sensorRange);
+    const right = rayDistance(robotState.heading + 55, robotState.sensorRange);
+    robotState.recoveryMode=true; robotState.recoveryTimer=1.9; robotState.recoveryPhase="reverse"; robotState.avoidDirection = left > right ? -1 : 1;
+    addLog(`Recovery: reverse then ${robotState.avoidDirection < 0 ? "left" : "right"}`);
+  }
+
+  function updateRecovery(dt) {
+    robotState.recoveryTimer -= dt;
+    if (robotState.recoveryPhase==="reverse"){
+      robotState.cmd="backward"; robotState.desiredSpeed=1.1; robotState.steering=0;
+      if (!window.lastReverseBeep || performance.now() - window.lastReverseBeep > 420) { playReverseBeep(); window.lastReverseBeep = performance.now(); }
+      if (robotState.recoveryTimer<=1.15) robotState.recoveryPhase="turn";
+      return;
+    }
+    if (robotState.recoveryPhase==="turn"){
+      robotState.cmd="backward"; robotState.desiredSpeed=0.8; robotState.steering=robotState.avoidDirection*1.25;
+      if (robotState.recoveryTimer<=0.45) robotState.recoveryPhase="exit"; return;
+    }
+    if (robotState.recoveryPhase==="exit"){
+      robotState.cmd="forward"; robotState.desiredSpeed=0.9; robotState.steering=robotState.avoidDirection*0.95;
+      if (robotState.recoveryTimer<=0){ robotState.recoveryMode=false; robotState.recoveryPhase="none"; robotState.stuckTime=0; assignCurrentTaskPath(); addLog("Recovery complete"); }
+    }
+  }
+
+  function shouldYieldAtIntersection() {
+    const nearStop = stopLines.some(s => Math.hypot(robotState.x - s.x, robotState.z - s.z) < 1.8);
+    if (!nearStop) return false;
+    const nearFork = forklifts.some(fl => Math.hypot(robotState.x - fl.x, robotState.z - fl.z) < 5.0);
+    const nearWorker = workers.some(wk => Math.hypot(robotState.x - wk.x, robotState.z - wk.z) < 4.0);
+    return nearFork || nearWorker;
+  }
+
+  function followPath() {
+    if (!robotState.path.length) return;
+    advancePathIndex();
+    const currentNode = robotState.path[Math.min(robotState.pathIndex, robotState.path.length-1)];
+    const finalNode = robotState.path[robotState.path.length-1];
+    const look = getLookaheadPoint();
+    if (!currentNode || !look || !finalNode) return;
+    robotState.targetPos = { x:finalNode.x, z:finalNode.z };
+
+    const leftDist=rayDistance(robotState.heading-38,robotState.sensorRange);
+    const rightDist=rayDistance(robotState.heading+38,robotState.sensorRange);
+    if (robotState.distance < 1.8){ robotState.avoidDirection = leftDist > rightDist ? -1 : 1; beginRecovery(); return; }
+
+    if (shouldYieldAtIntersection()) {
+      robotState.cmd = "stop";
+      robotState.desiredSpeed = 0;
+      robotState.taskStage = "yielding";
+      if (!window.lastYieldLog || performance.now()-window.lastYieldLog>1200) { addLog("Yielding at intersection"); window.lastYieldLog = performance.now(); }
+      return;
+    }
+
+    const dx=look.x-robotState.x, dz=look.z-robotState.z;
+    const targetDeg=THREE.MathUtils.radToDeg(Math.atan2(dz,dx));
+    const diff=shortestSignedAngle(normalizeAngle(robotState.heading), normalizeAngle(targetDeg));
+    const absDiff=Math.abs(diff);
+    const distToLook=Math.max(0.5,Math.hypot(dx,dz));
+    const distToFinal=Math.hypot(finalNode.x-robotState.x,finalNode.z-robotState.z);
+
+    const headingError=THREE.MathUtils.degToRad(diff);
+    const curvature=(2*Math.sin(headingError))/distToLook;
+    robotState.steering = THREE.MathUtils.clamp(curvature*4.2, -0.92, 0.92); // turning radius limit
+    robotState.cmd="forward";
+    if (absDiff>90) robotState.desiredSpeed=0.45;
+    else if (absDiff>55) robotState.desiredSpeed=0.75;
+    else if (absDiff>25) robotState.desiredSpeed=1.0;
+    else if (distToFinal<3.0) robotState.desiredSpeed=0.70;
+    else robotState.desiredSpeed=robotState.speed;
+  }
+
+  function finishTaskAndMoveNext() {
+    const task=robotState.taskQueue[robotState.taskIndex];
+    if (!task) return;
+    task.status="done";
+    if (task.type==="pickup"){ robotState.carrying=true; robotState.liftTarget=1; addLog("Pickup complete"); }
+    else if (task.type==="drop"){ robotState.carrying=false; robotState.liftTarget=0; addLog("Drop complete"); }
+    else if (task.type==="bay"){ robotState.liftTarget=0; addLog("Reached bay"); }
+    updatePayloadView();
+    robotState.taskIndex += 1; robotState.actionCooldown = 0.45; robotState.processTimer = 0; robotState.taskStage = "moving";
+    robotState.forkTarget = 0;
+    assignCurrentTaskPath(); renderQueue();
+  }
+
+  function updateTaskLogic(dt) {
+    if (robotState.mode !== "agv") return;
+    if (robotState.actionCooldown > 0){ robotState.actionCooldown -= dt; robotState.cmd="stop"; robotState.desiredSpeed=0; return; }
+
+    if (robotState.charging){
+      robotState.taskStage = "charging"; robotState.cmd="stop"; robotState.desiredSpeed=0;
+      robotState.battery=Math.min(100, robotState.battery + 24*dt); robotState.chargeProgress=robotState.battery;
+      if (robotState.battery >= 99.8){
+        robotState.battery=100; robotState.charging=false; robotState.emergencyCharge=false; robotState.chargeProgress=100;
+        robotState.actionCooldown=0.5; robotState.taskStage="moving"; addLog("Charging complete"); assignCurrentTaskPath();
+      }
+      return;
+    }
+
+    const activeTask = robotState.emergencyCharge ? { x:chargeDock.position.x, z:chargeDock.position.z, id:"Charge Dock", type:"charge", needsLift:false } : robotState.taskQueue[robotState.taskIndex];
+    if (!activeTask) return;
+
+    const distToGoal = Math.hypot(activeTask.x - robotState.x, activeTask.z - robotState.z);
+    if (distToGoal <= 1.9){
+      robotState.cmd="stop"; robotState.desiredSpeed=0;
+      if (robotState.taskStage !== "processing"){
+        robotState.taskStage="processing"; robotState.processTimer = activeTask.needsLift ? 1.3 : 0.55;
+        if (activeTask.type==="pickup"){ robotState.liftTarget=0.15; robotState.forkTarget=1; }
+        else if (activeTask.type==="drop"){ robotState.liftTarget=1; robotState.forkTarget=0.7; }
+        else robotState.liftTarget=0;
+        addLog(`Processing ${activeTask.id}`);
+      } else {
+        robotState.processTimer -= dt;
+        if (activeTask.type==="pickup"){
+          if (robotState.processTimer < 0.9) robotState.liftTarget = 1;
+          if (robotState.processTimer < 0.45) { robotState.carrying = true; updatePayloadView(); }
+        }
+        if (activeTask.type==="drop"){
+          if (robotState.processTimer < 0.65) robotState.liftTarget = 0.2;
+          if (robotState.processTimer < 0.3) { robotState.carrying = false; updatePayloadView(); }
+        }
+        if (robotState.processTimer <= 0){
+          if (activeTask.type==="charge"){ robotState.charging=true; addLog("Docked for charging"); }
+          else finishTaskAndMoveNext();
+        }
+      }
+      return;
+    }
+    robotState.taskStage="moving";
+  }
+
+  function updateSupportAgvs(dt) {
+    for (const agv of supportAgvs){
+      const target=agv.path[agv.index], dx=target.x-agv.x, dz=target.z-agv.z, dist=Math.hypot(dx,dz);
+      if (dist<0.6) agv.index=(agv.index+1)%agv.path.length;
+      const angle=Math.atan2(dz,dx); agv.heading=angle;
+      agv.x += Math.cos(angle)*agv.speed*dt; agv.z += Math.sin(angle)*agv.speed*dt;
+      agv.mesh.position.set(agv.x,0,agv.z); agv.mesh.rotation.y=-angle;
+      agv.wheels.forEach(w=>w.rotation.x += agv.speed*dt*2.6);
+    }
+  }
+
+  function updateForklifts(dt) {
+    forklifts.forEach((fl,idx)=>{
+      if (fl.pause > 0) { fl.pause -= dt; return; }
+      const target=fl.path[fl.index], dx=target.x-fl.x, dz=target.z-fl.z, dist=Math.hypot(dx,dz);
+      if (dist<0.55){ fl.index=(fl.index+1)%fl.path.length; fl.pause = 0.4; }
+      const angle=Math.atan2(dz,dx); fl.heading=angle;
+      fl.x += Math.cos(angle)*fl.speed*dt; fl.z += Math.sin(angle)*fl.speed*dt;
+      fl.mesh.position.set(fl.x,0,fl.z); fl.mesh.rotation.y=-angle;
+      fl.mesh.position.y = Math.sin(performance.now()*0.002 + idx)*0.01;
+    });
+  }
+
+  function updateWorkers(dt) {
+    workers.forEach((wk,idx)=>{
+      const target=wk.path[wk.index], dx=target.x-wk.x, dz=target.z-wk.z, dist=Math.hypot(dx,dz);
+      if (dist<0.35) wk.index=(wk.index+1)%wk.path.length;
+      const angle=Math.atan2(dz,dx); wk.heading=angle;
+      wk.x += Math.cos(angle)*wk.speed*dt; wk.z += Math.sin(angle)*wk.speed*dt;
+      wk.mesh.position.set(wk.x,0,wk.z); wk.mesh.rotation.y=-angle + Math.PI/2;
+      wk.mesh.position.y = Math.abs(Math.sin(performance.now()*0.004 + idx))*0.02;
+    });
+  }
+
+  function animateConveyors() {
+    const now = performance.now()*0.001;
+    conveyorBelts.forEach((belt,i)=>{
+      if (belt.dir==="x") belt.stripe.position.x = (((now*2.5)+i*0.95) % (belt.span+1.6)) - (belt.span/2 + 0.8);
+      else belt.stripe.position.z = (((now*2.5)+i*0.95) % (belt.span+1.6)) - (belt.span/2 + 0.8);
+    });
+    conveyorPackages.forEach((item,i)=>{
+      if (item.dir==="x") item.pack.position.x = (((now*1.7)+i*1.35) % (item.span+1.4)) - (item.span/2 + 0.7);
+      else item.pack.position.z = (((now*1.7)+i*1.35) % (item.span+1.4)) - (item.span/2 + 0.7);
+    });
+  }
+
+  function animateDockDoors() {
+    const t = performance.now() * 0.001;
+    dockDoors.forEach((d, i) => {
+      const open = 1.15 + Math.sin(t * 0.8 + d.phase) * 0.95;
+      d.shutter.position.y = Math.max(0, open);
+    });
+  }
+
+  function animateSafetyLights() {
+    safetyLights.forEach((s,i)=>{
+      const phase = 0.5 + 0.5*Math.sin(performance.now()*0.01 + i*0.8);
+      s.light.intensity = 0.8 + phase*1.8;
+      s.domeMat.emissiveIntensity = 0.25 + phase*0.95;
+    });
+  }
+
+  function keepRobotInBounds(){ robotState.x=Math.max(-28,Math.min(28,robotState.x)); robotState.z=Math.max(-28,Math.min(28,robotState.z)); }
+
+  function updateRobot(dt) {
+    keepRobotInBounds();
+    updateAisleReservation();
+    maybeRecalculatePath();
+
+    robotState.lift += (robotState.liftTarget - robotState.lift) * 0.10;
+    liftFrame.position.y = robotState.lift * 0.92;
+    robotState.forkExtend += (robotState.forkTarget - robotState.forkExtend) * 0.12;
+    forkGroup.position.x = robotState.forkExtend * 0.55;
+    if (robotState.carrying) {
+      const s = 0.45 + robotState.lift * 0.55;
+      payload.scale.set(s,s,s);
+    }
+
+    robotState.distance = rayDistance(robotState.heading, robotState.sensorRange);
+    const aheadX = robotState.x + Math.cos(THREE.MathUtils.degToRad(robotState.heading))*2.6;
+    const aheadZ = robotState.z + Math.sin(THREE.MathUtils.degToRad(robotState.heading))*2.6;
+    const nearWorker = workerCollision(aheadX, aheadZ, 0.35);
+    const nearForklift = forkliftCollision(aheadX, aheadZ, 0.28);
+    robotState.obstacle = robotState.distance < 1.9 || !!nearWorker || !!nearForklift;
+    if ((nearWorker || nearForklift) && !robotState.recoveryMode) {
+      warningBlink = 1;
+      if (!window.lastWarningTone || performance.now()-window.lastWarningTone>900){
+        addLog(nearWorker ? "Worker detected ahead" : "Forklift detected ahead");
+        playWarningBeep(); window.lastWarningTone = performance.now();
+      }
+    }
+
+    if (robotState.mode==="agv" && !robotState.path.length) assignCurrentTaskPath();
+
+    if (robotState.recoveryMode) updateRecovery(dt);
+    else if (robotState.mode==="manual") {
+      // manual direct
+    } else if (robotState.mode==="auto") {
+      const left=rayDistance(robotState.heading-35,robotState.sensorRange);
+      const right=rayDistance(robotState.heading+35,robotState.sensorRange);
+      robotState.currentJobText="Auto Avoid"; robotState.targetName="Forward"; robotState.cmd="forward";
+      robotState.desiredSpeed = robotState.distance < 2.5 ? 0.8 : robotState.speed;
+      robotState.steering = robotState.distance < 2.5 ? (left > right ? -1 : 1) : 0;
+    } else if (robotState.mode==="patrol") {
+      const wp = patrolPoints[patrolIndex];
+      if (Math.hypot(wp.x-robotState.x, wp.z-robotState.z) < 1.5){
+        patrolIndex=(patrolIndex+1)%patrolPoints.length; assignPathTo(patrolPoints[patrolIndex].x, patrolPoints[patrolIndex].z, "Patrol");
+      }
+      robotState.currentJobText = "Patrol"; followPath();
+    } else if (robotState.mode==="agv") {
+      if (robotState.battery <= 18 && !robotState.charging && !robotState.emergencyCharge) { robotState.emergencyCharge = true; addLog("Low battery, emergency charge activated"); assignCurrentTaskPath(); }
+      if (!robotState.charging) followPath();
+    }
+
+    // Better vehicle motion: acceleration/braking curve
+    let targetVelocity = 0;
+    if (robotState.cmd==="forward") targetVelocity = robotState.desiredSpeed || robotState.speed;
+    else if (robotState.cmd==="backward") targetVelocity = -(robotState.desiredSpeed || 1.0);
+    const accelRate = targetVelocity >= robotState.velocity ? 2.9 : 4.0;
+    robotState.velocity += (targetVelocity - robotState.velocity) * Math.min(1, accelRate * dt);
+    if (robotState.cmd==="stop") robotState.velocity *= 0.72;
+    robotState.velocity = THREE.MathUtils.clamp(robotState.velocity, -robotState.speed, robotState.speed);
+
+    if (robotState.mode==="manual") {
+      if (robotState.cmd==="left") robotState.angularVelocity -= 2.5 * robotState.turnRate * dt;
+      else if (robotState.cmd==="right") robotState.angularVelocity += 2.5 * robotState.turnRate * dt;
+      else robotState.angularVelocity *= 0.82;
+    } else {
+      robotState.angularVelocity += robotState.steering * 2.7 * robotState.turnRate * dt;
+      robotState.angularVelocity *= 0.90;
+    }
+    robotState.angularVelocity = THREE.MathUtils.clamp(robotState.angularVelocity, -4.0, 4.0);
+    robotState.heading += THREE.MathUtils.radToDeg(robotState.angularVelocity * dt);
+
+    const rad = THREE.MathUtils.degToRad(robotState.heading);
+    const newX = robotState.x + Math.cos(rad) * robotState.velocity * dt;
+    const newZ = robotState.z + Math.sin(rad) * robotState.velocity * dt;
+    const borderSafe = newX > -30 && newX < 30 && newZ > -30 && newZ < 30;
+    const hitShelf = shelfCollision(newX,newZ,0.15);
+    const hitForklift = forkliftCollision(newX,newZ,0.12);
+    const hitWorker = workerCollision(newX,newZ,0.15);
+
+    // AGV-to-AGV collision avoidance
+    const hitAgv = supportAgvs.find(a => Math.hypot(newX-a.x, newZ-a.z) < 1.8);
+
+    if (borderSafe && !hitShelf && !hitForklift && !hitWorker && !hitAgv) {
+      robotState.x = newX; robotState.z = newZ;
+    } else {
+      robotState.velocity *= -0.18;
+      if (!robotState.recoveryMode && robotState.mode!=="manual") beginRecovery();
+      const now = performance.now();
+      if (now - (window.lastCollisionLog || 0) > 700) {
+        addLog(hitWorker ? "Worker safety stop" : hitForklift ? "Forklift safety stop" : hitAgv ? "AGV safety stop" : "Collision detected");
+        playWarningBeep();
+        window.lastCollisionLog = now;
+      }
+    }
+
+    keepRobotInBounds();
+
+    const moved = Math.hypot(robotState.x-robotState.prevX, robotState.z-robotState.prevZ);
+    if (robotState.mode!=="manual" && (robotState.cmd==="forward" || robotState.cmd==="backward" || robotState.recoveryMode)) {
+      if (moved < 0.015 && Math.abs(robotState.velocity) < 0.26) robotState.stuckTime += dt;
+      else robotState.stuckTime = Math.max(0, robotState.stuckTime - dt*2.5);
+      if (robotState.stuckTime > 1.4 && !robotState.recoveryMode) beginRecovery();
+    } else robotState.stuckTime = 0;
+    robotState.prevX = robotState.x; robotState.prevZ = robotState.z;
+
+    if (!robotState.charging) {
+      robotState.battery -= (0.06 + Math.abs(robotState.velocity)*0.025 + Math.abs(robotState.angularVelocity)*0.018) * dt;
+      robotState.battery = Math.max(0, robotState.battery);
+      robotState.chargeProgress = robotState.battery;
+    }
+
+    robot.position.set(robotState.x,0,robotState.z); robot.rotation.y = -rad;
+    sensorCone.scale.set(THREE.MathUtils.clamp(robotState.distance/5,0.45,1.25),1,1);
+    sensorCone.material.color.set(robotState.obstacle ? 0xff5a5a : 0x19c37d);
+    wheelMeshes.forEach(w=>w.rotation.x += robotState.velocity * 0.13);
+    steerParents.forEach(s => s.rotation.y = -robotState.steering * 0.5); // wheel steering animation
+    brakeLeftMat.emissive.set(robotState.cmd==="stop" || robotState.cmd==="backward" ? 0xff0000 : 0x000000);
+    brakeRightMat.emissive.set(robotState.cmd==="stop" || robotState.cmd==="backward" ? 0xff0000 : 0x000000);
+    brakeLeftMat.emissiveIntensity = brakeRightMat.emissiveIntensity = (robotState.cmd==="stop" || robotState.cmd==="backward") ? 0.95 : 0;
+
+    if (trailEnabled && Math.abs(robotState.velocity) > 0.04) {
+      trailPoints.push({ x:robotState.x, z:robotState.z });
+      if (trailPoints.length > 2000) trailPoints.shift();
+    }
+
+    updateTaskLogic(dt);
+  }
+
+  function updateTrail() {
+    const positions = new Float32Array(trailPoints.length*3);
+    for (let i=0;i<trailPoints.length;i++){ positions[i*3]=trailPoints[i].x; positions[i*3+1]=0.06; positions[i*3+2]=trailPoints[i].z; }
+    trailLine.geometry.setAttribute("position", new THREE.BufferAttribute(positions,3));
+    trailLine.geometry.computeBoundingSphere();
+  }
+
+  function updateSensorVisuals() {
+    const start=new THREE.Vector3(robotState.x,0.15,robotState.z);
+    const frontDist=rayDistance(robotState.heading,robotState.sensorRange);
+    const leftDist=rayDistance(robotState.heading-35,robotState.sensorRange);
+    const rightDist=rayDistance(robotState.heading+35,robotState.sensorRange);
+    const pFront=rayPoint(robotState.heading,Math.min(frontDist,robotState.sensorRange));
+    const pLeft=rayPoint(robotState.heading-35,Math.min(leftDist,robotState.sensorRange));
+    const pRight=rayPoint(robotState.heading+35,Math.min(rightDist,robotState.sensorRange));
+    rayFront.geometry.setFromPoints([start,pFront]); rayLeft.geometry.setFromPoints([start,pLeft]); rayRight.geometry.setFromPoints([start,pRight]);
+    rayFront.visible=showRays; rayLeft.visible=showRays; rayRight.visible=showRays;
+    collisionLine.visible=robotState.obstacle; if(robotState.obstacle) collisionLine.geometry.setFromPoints([start,pFront]);
+    const pts=[new THREE.Vector3(robotState.x,0.06,robotState.z)];
+    for(let i=robotState.pathIndex;i<robotState.path.length;i++) pts.push(new THREE.Vector3(robotState.path[i].x,0.06,robotState.path[i].z));
+    routeLine.geometry.setFromPoints(pts); routeLine.computeLineDistances();
+  }
+
+  function updateCamera() {
+    const isMobile = window.innerWidth <= 820;
+    const dockingFocus = (robotState.taskStage==="processing" || robotState.charging) ? 1 : 0;
+    cameraZoomBoost += (dockingFocus - cameraZoomBoost) * 0.06;
+
+    if (cameraMode === "top") {
+      camera.position.x += (robotState.x - camera.position.x) * 0.08;
+      camera.position.y += ((isMobile ? 26 : 32) - camera.position.y) * 0.08;
+      camera.position.z += (robotState.z + 0.1 - camera.position.z) * 0.08;
+      camera.lookAt(robotState.x, 0, robotState.z);
+      return;
+    }
+
+    const headingRad = THREE.MathUtils.degToRad(robotState.heading);
+    const dockMode = cameraMode === "dock" ? 1 : 0;
+    const followDistance = ((isMobile ? 9 : 12) - cameraZoomBoost*3.2 - dockMode*2.8);
+    const followHeight = ((isMobile ? 7 : 9) - cameraZoomBoost*1.6 - dockMode*0.8);
+    const tx = robotState.x - Math.cos(headingRad) * followDistance;
+    const tz = robotState.z - Math.sin(headingRad) * followDistance;
+    const ty = followHeight;
+    camera.position.x += (tx - camera.position.x) * 0.05;
+    camera.position.y += (ty - camera.position.y) * 0.05;
+    camera.position.z += (tz - camera.position.z) * 0.05;
+    camera.lookAt(robotState.x, 1.35 + cameraZoomBoost*0.9 + dockMode*0.6, robotState.z);
+  }
+
+  function worldToMini(x,z){ const sx=miniMap.width/64, sy=miniMap.height/64; return { x:(x+32)*sx, y:miniMap.height - ((z+32)*sy) }; }
+  function drawMiniZone(zone,color,label) {
+    const p=worldToMini(zone.position.x,zone.position.z), size=4.6*(miniMap.width/64);
+    miniCtx.fillStyle=color; miniCtx.globalAlpha=0.35; miniCtx.fillRect(p.x-size/2,p.y-size/2,size,size); miniCtx.globalAlpha=1;
+    miniCtx.fillStyle="#172434"; miniCtx.font="10px Arial"; miniCtx.fillText(label,p.x-size/2,p.y-size/2-4);
+  }
+  function drawMiniAgv(x,z,headingDeg,color,label) {
+    const p=worldToMini(x,z), rad=THREE.MathUtils.degToRad(headingDeg);
+    miniCtx.save(); miniCtx.translate(p.x,p.y); miniCtx.rotate(-rad); miniCtx.fillStyle=color; miniCtx.fillRect(-6,-4,12,8); miniCtx.fillStyle="#111827"; miniCtx.fillRect(3,-2,4,4); miniCtx.restore();
+    miniCtx.fillStyle="#172434"; miniCtx.font="10px Arial"; miniCtx.fillText(label,p.x-12,p.y-8);
+  }
+  function updateMiniMap() {
+    miniCtx.clearRect(0,0,miniMap.width,miniMap.height);
+    miniCtx.fillStyle="#eef5fb"; miniCtx.fillRect(0,0,miniMap.width,miniMap.height);
+    miniCtx.strokeStyle="#d8e5f4"; miniCtx.lineWidth=1;
+    for(let i=0;i<=16;i++){ const x=(miniMap.width/16)*i; miniCtx.beginPath(); miniCtx.moveTo(x,0); miniCtx.lineTo(x,miniMap.height); miniCtx.stroke(); }
+    for(let i=0;i<=12;i++){ const y=(miniMap.height/12)*i; miniCtx.beginPath(); miniCtx.moveTo(0,y); miniCtx.lineTo(miniMap.width,y); miniCtx.stroke(); }
+
+    drawMiniZone(pickupA,"#22c55e","P-A"); drawMiniZone(dropB,"#f59e0b","D-B"); drawMiniZone(loadingBay,"#60a5fa","Bay"); drawMiniZone(chargeDock,"#38bdf8","Charge");
+    shelves.forEach(s=>{ const p=worldToMini(s.position.x,s.position.z), w=s.userData.w*(miniMap.width/64), h=s.userData.d*(miniMap.height/64); miniCtx.fillStyle="#7b8799"; miniCtx.fillRect(p.x-w/2,p.y-h/2,w,h); });
+
+    miniCtx.strokeStyle="#2563eb"; miniCtx.setLineDash([5,4]);
+    if(robotState.path.length){ miniCtx.beginPath(); const first=worldToMini(robotState.x,robotState.z); miniCtx.moveTo(first.x,first.y); for(let i=robotState.pathIndex;i<robotState.path.length;i++){ const p=worldToMini(robotState.path[i].x,robotState.path[i].z); miniCtx.lineTo(p.x,p.y); } miniCtx.stroke(); }
+    miniCtx.setLineDash([]);
+
+    drawMiniAgv(robotState.x,robotState.z,robotState.heading,"#1d4ed8","1");
+    supportAgvs.forEach(agv=>drawMiniAgv(agv.x,agv.z,THREE.MathUtils.radToDeg(agv.heading),agv.color,agv.id.slice(-1)));
+    forklifts.forEach((fl,idx)=>drawMiniAgv(fl.x,fl.z,THREE.MathUtils.radToDeg(fl.heading),"#f59e0b","F"+(idx+1)));
+    workers.forEach((wk,idx)=>drawMiniAgv(wk.x,wk.z,THREE.MathUtils.radToDeg(wk.heading),"#ef4444","W"+(idx+1)));
+  }
+
+  function updateChargeUI() {
+    const pct=Math.max(0,Math.min(100,robotState.battery));
+    document.getElementById("chargeRing").style.background = `conic-gradient(#22c55e 0deg, #60a5fa ${pct*3.6}deg, #dce8f6 ${pct*3.6}deg 360deg)`;
+    document.getElementById("chargeRingLabel").textContent = `${Math.round(pct)}%`;
+    document.getElementById("chargeBar").style.width = `${pct}%`;
+    document.getElementById("chargeText").textContent = robotState.charging ? "Charging at dock" : "Not charging";
+  }
+
+  function updateUI() {
+    const heading=normalizeAngle(robotState.heading).toFixed(0), battery=robotState.battery.toFixed(0);
+    document.getElementById("batteryBadge").textContent=`Battery: ${battery}%`;
+    document.getElementById("batteryBadge").className="badge " + (battery>35 ? "warn" : "danger");
+    document.getElementById("modeBadge").textContent=`Mode: ${robotState.mode==="agv" ? "Queue + A*" : robotState.mode}`;
+    document.getElementById("stateBadge").textContent=`State: ${robotState.cmd}`;
+    document.getElementById("taskBadge").textContent=`Task: ${robotState.currentJobText}`;
+    document.getElementById("teleX").textContent=robotState.x.toFixed(2);
+    document.getElementById("teleZ").textContent=robotState.z.toFixed(2);
+    document.getElementById("teleHeading").textContent=`${heading}°`;
+    document.getElementById("teleCmd").textContent=robotState.cmd;
+    document.getElementById("teleMode").textContent=robotState.mode;
+    document.getElementById("teleBattery").textContent=`${battery}%`;
+    document.getElementById("teleDist").textContent=`${robotState.distance.toFixed(2)} m`;
+    document.getElementById("teleObs").textContent=(robotState.obstacle || robotState.recoveryMode || robotState.distance < 2.2) ? "Yes" : "No";
+    document.getElementById("teleTarget").textContent=robotState.targetName;
+    document.getElementById("teleRecovery").textContent=robotState.recoveryMode ? robotState.recoveryPhase : "No";
+    document.getElementById("teleReserve").textContent=robotState.reservedAisle ? "Yes" : "No";
+    document.getElementById("teleCamera").textContent=cameraMode;
+    document.getElementById("teleLift").textContent=robotState.lift > 0.45 ? "Up" : "Down";
+
+    document.getElementById("speedStat").textContent=Math.abs(robotState.velocity).toFixed(2);
+    document.getElementById("distanceStat").textContent=robotState.distance.toFixed(2);
+    document.getElementById("headingStat").textContent=`${heading}°`;
+    document.getElementById("obstacleStat").textContent=(robotState.obstacle || robotState.recoveryMode || robotState.distance < 2.2) ? "Yes" : "No";
+    document.getElementById("stageStat").textContent=robotState.taskStage;
+    document.getElementById("payloadStat").textContent=robotState.carrying ? "Loaded" : "Empty";
+
+    updatePayloadView();
+    updateChargeUI();
+  }
+
+  function resizeRenderer(){ const shell=document.getElementById("scene-shell"), w=shell.clientWidth, h=shell.clientHeight; renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+  function setMobileSection(target){
+    const isMobile=window.innerWidth<=820;
+    const controls=document.getElementById("section-controls"), telemetry=document.getElementById("section-telemetry"), status=document.getElementById("section-status"), nav=document.getElementById("mobileBottomNav");
+    [controls,telemetry,status].forEach(el=>el.classList.remove("hidden-mobile-section"));
+    if(!isMobile) return;
+    if(target==="scene"){ controls.classList.add("hidden-mobile-section"); telemetry.classList.add("hidden-mobile-section"); status.classList.add("hidden-mobile-section"); }
+    else if(target==="controls"){ telemetry.classList.add("hidden-mobile-section"); status.classList.add("hidden-mobile-section"); }
+    else if(target==="telemetry"){ controls.classList.add("hidden-mobile-section"); status.classList.add("hidden-mobile-section"); }
+    else if(target==="status"){ controls.classList.add("hidden-mobile-section"); telemetry.classList.add("hidden-mobile-section"); }
+    nav.querySelectorAll("button").forEach(btn=>btn.classList.toggle("active", btn.dataset.target===target));
+  }
+  document.getElementById("mobileBottomNav").addEventListener("click", e => { const btn=e.target.closest("button[data-target]"); if(!btn) return; setMobileSection(btn.dataset.target); });
+
+  document.getElementById("speedSlider").addEventListener("input",e=>{ robotState.speed=parseFloat(e.target.value); document.getElementById("speedValue").textContent=robotState.speed.toFixed(1); });
+  document.getElementById("turnSlider").addEventListener("input",e=>{ robotState.turnRate=parseFloat(e.target.value); document.getElementById("turnValue").textContent=robotState.turnRate.toFixed(1); });
+  document.getElementById("rangeSlider").addEventListener("input",e=>{ robotState.sensorRange=parseFloat(e.target.value); document.getElementById("rangeValue").textContent=robotState.sensorRange.toFixed(1); });
+  document.getElementById("lookaheadSlider").addEventListener("input",e=>{ robotState.lookahead=parseFloat(e.target.value); document.getElementById("lookaheadValue").textContent=robotState.lookahead.toFixed(1); });
+
+  document.addEventListener("pointerdown", unlockAudio, { once:true });
+  document.addEventListener("keydown", e => {
+    unlockAudio();
+    const key=e.key.toLowerCase();
+    if(key==="p") setMode("patrol");
+    if(key==="g") setMode("agv");
+    if(key==="t"){ trailEnabled=!trailEnabled; addLog(`Trail ${trailEnabled ? "enabled" : "disabled"}`); }
+    if(key==="r"){ showRays=!showRays; addLog(`Sensor rays ${showRays ? "enabled" : "disabled"}`); }
+    if(robotState.mode!=="manual") return;
+    if(key==="w") setCommand("forward");
+    else if(key==="s") setCommand("backward");
+    else if(key==="a") setCommand("left");
+    else if(key==="d") setCommand("right");
+    else if(key===" "){ e.preventDefault(); setCommand("stop"); }
+  });
+
+  function setMode(mode){
+    robotState.mode=mode; robotState.recoveryMode=false; robotState.recoveryPhase="none"; robotState.recoveryTimer=0;
+    setButtonStates(mode);
+    if(mode==="manual"){ robotState.cmd="stop"; robotState.desiredSpeed=0; robotState.currentJobText="Manual"; robotState.targetName="Manual"; }
+    else if(mode==="auto"){ robotState.cmd="forward"; robotState.currentJobText="Auto Avoid"; robotState.targetName="Forward"; }
+    else if(mode==="patrol"){ patrolIndex=0; robotState.cmd="forward"; robotState.currentJobText="Patrol"; assignPathTo(patrolPoints[patrolIndex].x, patrolPoints[patrolIndex].z, "Patrol"); }
+    else if(mode==="agv"){ robotState.cmd="forward"; assignCurrentTaskPath(); }
+    renderQueue(); addLog(`Mode changed to ${mode}`);
+  }
+  window.setMode=setMode;
+
+  function reloadTaskQueue(){ robotState.taskQueue=baseTaskQueue(); robotState.taskIndex=0; robotState.actionCooldown=0; robotState.emergencyCharge=false; assignCurrentTaskPath(); renderQueue(); addLog("Task queue reloaded"); }
+  window.reloadTaskQueue=reloadTaskQueue;
+
+  function resetArena(){
+    robotState.x=-22; robotState.z=-20; robotState.heading=0; robotState.velocity=0; robotState.angularVelocity=0; robotState.desiredSpeed=0;
+    robotState.battery=100; robotState.cmd="stop"; robotState.carrying=false; robotState.lift=0; robotState.liftTarget=0; robotState.forkExtend=0; robotState.forkTarget=0;
+    robotState.charging=false; robotState.recoveryMode=false; robotState.recoveryPhase="none"; robotState.recoveryTimer=0; robotState.stuckTime=0;
+    robotState.path=[]; robotState.pathIndex=0; robotState.currentJobText="Waiting"; robotState.taskStage="idle"; robotState.actionCooldown=0; robotState.processTimer=0; robotState.emergencyCharge=false;
+    robotState.reservedAisle=null;
+    trailPoints.length=0; patrolIndex=0; robotState.taskQueue=baseTaskQueue(); robotState.taskIndex=0;
+    robot.position.set(-22,0,-20);
+
+    // restore original shelf layout
+    shelves.forEach((s, i) => {
+      s.position.x = originalShelfPositions[i].x;
+      s.position.z = originalShelfPositions[i].z;
+      s.rotation.y = originalShelfPositions[i].rot || 0;
+    });
+
+    // reset moving agents
+    if (supportAgvs[0]) { supportAgvs[0].x=-16; supportAgvs[0].z=14; supportAgvs[0].index=0; supportAgvs[0].mesh.position.set(-16,0,14); }
+    if (supportAgvs[1]) { supportAgvs[1].x=14; supportAgvs[1].z=-2; supportAgvs[1].index=0; supportAgvs[1].mesh.position.set(14,0,-2); }
+    if (forklifts[0]) { forklifts[0].x=-24; forklifts[0].z=24; forklifts[0].index=0; forklifts[0].mesh.position.set(-24,0,24); }
+    if (forklifts[1]) { forklifts[1].x=24; forklifts[1].z=24; forklifts[1].index=0; forklifts[1].mesh.position.set(24,0,24); }
+
+    updatePayloadView();
+    setMode("agv");
+    assignCurrentTaskPath();
+    addLog("Arena reset with original shelf layout");
+  }
+  window.resetArena=resetArena;
+
+
+  function applyShelfLayout(layout){
+    shelves.forEach((s, i) => {
+      s.position.x = layout[i].x;
+      s.position.z = layout[i].z;
+      if (layout[i].rot) s.rotation.y = layout[i].rot;
+      else s.rotation.y = 0;
+    });
+  }
+
+  function randomizeObstacles(){
+    const positions=[
+      [-14,-10],[-4,-10],[10,-10],[-14,6],[-2,8],[12,8],
+      [-8,-2],[8,0],[-10,16],[10,16],[0,-16],[16,-2]
+    ];
+    const zones = [
+      {x:pickupA.position.x, z:pickupA.position.z, r:5.8},
+      {x:dropB.position.x, z:dropB.position.z, r:5.8},
+      {x:loadingBay.position.x, z:loadingBay.position.z, r:5.8},
+      {x:chargeDock.position.x, z:chargeDock.position.z, r:5.8},
+    ];
+
+    const shuffled = positions.slice().sort(() => Math.random() - 0.5);
+    let used = 0;
+
+    shelves.forEach((s) => {
+      while (used < shuffled.length) {
+        const [px, pz] = shuffled[used++];
+        const badZone = zones.some(z => Math.hypot(px - z.x, pz - z.z) < z.r);
+        const badOther = shelves.some(other => other !== s && Math.hypot(px - other.position.x, pz - other.position.z) < 4.5);
+        if (!badZone && !badOther) {
+          s.position.x = px;
+          s.position.z = pz;
+          break;
+        }
+      }
+    });
+
+    robotState.path = [];
+    robotState.pathIndex = 0;
+    robotState.recoveryMode = false;
+    robotState.recoveryPhase = "none";
+    assignCurrentTaskPath();
+    addLog("Obstacles randomized with safe shelf layout");
+  }
+  window.randomizeObstacles=randomizeObstacles;
+
+  const clock = new THREE.Clock();
+  function animate(){
+    const dt=Math.min(clock.getDelta(),0.05);
+    warningBlink *= 0.92;
+    updateSupportAgvs(dt); updateForklifts(dt); updateWorkers(dt); animateConveyors(); animateDockDoors(); animateSafetyLights(); updateRobot(dt);
+    updateTrail(); updateSensorVisuals(); updateCamera(); updateUI(); updateMiniMap();
+    renderer.render(scene,camera);
+    requestAnimationFrame(animate);
+  }
+
+  window.addEventListener("resize", ()=>{ resizeRenderer(); setMobileSection("scene"); });
+
+  resizeRenderer();
+  robotState.taskQueue=baseTaskQueue();
+  assignCurrentTaskPath();
+  updatePayloadView();
+  setButtonStates("agv");
+  setCameraMode("follow");
+  setMobileSection("scene");
+  addLog("v8.4 loaded");
+  addLog("Rolling shutter dock animation added");
+  addLog("Improved warehouse lighting and shadows added");
+  addLog("Shelf posts and warning stripes now move with shelves");
+  addLog("Random obstacles now use distinct warehouse layouts");
+  addLog("Camera modes: follow, top, dock");
+  animate();
+
+} catch(err) {
+  const box=document.getElementById("errorBox");
+  box.style.display="block";
+  box.textContent="3D scene failed: " + err.message;
+  console.error(err);
+}
+</script>
+</body>
+</html>
